@@ -13,11 +13,14 @@ export const listInventories = async (rawUser: UserPayload | undefined, query: I
   const user = assertAdminUser(rawUser);
   const storeIds = await resolveReadableStores(user, query.storeId);
   const where = inventoryWhere(query, storeIds);
-  const [items, total] = await prisma.$transaction([
+  const statsWhere = inventoryStatsWhere(query, storeIds);
+  const [items, total, lowStock, outOfStock] = await prisma.$transaction([
     prisma.inventory.findMany({ where, include: includeInventory, skip: skip(query), take: query.limit, orderBy: orderBy(query) }),
     prisma.inventory.count({ where }),
+    prisma.inventory.count({ where: { ...statsWhere, stock: { gt: 0, lte: 20 } } }),
+    prisma.inventory.count({ where: { ...statsWhere, stock: 0 } }),
   ]);
-  return { data: items.map(mapInventory), meta: meta(query, total) };
+  return { data: items.map(mapInventory), meta: meta(query, total), stats: { lowStock, outOfStock } };
 };
 
 export const createInventory = async (rawUser: UserPayload | undefined, input: InventoryBodyInput) => {
@@ -53,6 +56,11 @@ const inventoryWhere = (query: InventoryListInput, storeIds?: string[]): Prisma.
   ...(storeIds ? { storeId: { in: storeIds.length ? storeIds : ['__no_access__'] } } : {}),
   ...productFilter(query),
   ...stockStatusWhere(query.stockStatus),
+});
+
+const inventoryStatsWhere = (query: InventoryListInput, storeIds?: string[]): Prisma.InventoryWhereInput => ({
+  ...(storeIds ? { storeId: { in: storeIds.length ? storeIds : ['__no_access__'] } } : {}),
+  ...productFilter(query),
 });
 
 const productFilter = (query: InventoryListInput): Prisma.InventoryWhereInput => ({
