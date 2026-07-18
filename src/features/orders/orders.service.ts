@@ -7,36 +7,37 @@ interface CreateOrderInput {
   courierCompany: string;
   courierName: string;
   shippingCost: number;
+  cartItemIds: string[];
+  paymentMethod: string;
 }
 
-// Feature Customer: Membuat Pesanan Baru Berdasarkan Isi Keranjang Belanja (100% Dinamis)
 export const createOrderService = async (data: CreateOrderInput) => {
-  // 1. Ambil data keranjang user beserta item-item di dalamnya lengkap dengan gambar asli
   const userCart = await prisma.cart.findFirst({
     where: { userId: data.userId },
-    include: { 
-      items: { 
-        include: { 
+    include: {
+      items: {
+        where: {
+          id: { in: data.cartItemIds }
+        },
+        include: {
           product: {
             include: {
-              productImages: true // 👈 Menyertakan relasi gambar Cloudinary yang sukses kita perbaiki
+              productImages: true
             }
-          } 
-        } 
-      } 
+          }
+        }
+      }
     }
   });
 
   if (!userCart || userCart.items.length === 0) {
-    throw new Error("Keranjang belanja kosong, tidak bisa membuat pesanan!");
+    throw new Error("Keranjang belanja kosong atau item pilihan tidak valid, gagal membuat pesanan!");
   }
 
-  // Ambil storeId dari item pertama di dalam keranjang belanja user
   const targetStoreId = userCart.items[0].storeId;
 
-  // 2. Ambil alamat utama (isPrimary) user untuk direlasikan ke order
   const primaryAddress = await prisma.address.findFirst({
-    where: { 
+    where: {
       userId: data.userId,
       isPrimary: true,
       deletedAt: null
@@ -47,58 +48,40 @@ export const createOrderService = async (data: CreateOrderInput) => {
     throw new Error("Gagal membuat pesanan. User belum memiliki alamat utama!");
   }
 
-  // 3. Hitung total harga produk murni (SUB TOTAL)
   let totalProductPrice = 0;
   userCart.items.forEach((item) => {
     const currentPrice = Number(item.priceSnapshot) || Number(item.product.price);
     totalProductPrice += currentPrice * item.quantity;
   });
 
-  // 4. Hitung Grand Total (Subtotal + Ongkir)
   const grandTotal = totalProductPrice + Number(data.shippingCost);
 
-  // 5. Jalankan Database Transaction secara aman
   return await prisma.$transaction(async (tx) => {
-    
-    // A. Buat data induk Order terlebih dahulu (Sesuai skema relasi database asli timmu)
     const newOrder = await tx.order.create({
       data: {
-        user: {
-          connect: { id: data.userId }
-        },
-        address: {
-          connect: { id: primaryAddress.id }
-        },
-        store: {
-          connect: { id: targetStoreId }
-        },
+        user: { connect: { id: data.userId } },
+        address: { connect: { id: primaryAddress.id } },
+        store: { connect: { id: targetStoreId } },
         subtotal: new Prisma.Decimal(totalProductPrice),
         shippingCost: new Prisma.Decimal(data.shippingCost),
-        totalAmount: new Prisma.Decimal(grandTotal)
+        totalAmount: new Prisma.Decimal(grandTotal),
+        notes: data.paymentMethod
       }
     });
 
-    // B. Buat data Shipping terpisah (Menggunakan data kurir dari frontend)
     await tx.shipping.create({
       data: {
-        order: {
-          connect: { id: newOrder.id }
-        },
+        order: { connect: { id: newOrder.id } },
         courier: data.courierCompany,
         service: data.courierName,
         shippingCost: new Prisma.Decimal(data.shippingCost),
-        originStore: {
-          connect: { id: targetStoreId }
-        },
-        destinationAddress: {
-          connect: { id: primaryAddress.id }
-        }
+        originStore: { connect: { id: targetStoreId } },
+        destinationAddress: { connect: { id: primaryAddress.id } }
       }
     });
 
-    // C. Persiapkan item data untuk dipindahkan ke tabel OrderItem
     const orderItemsData = userCart.items.map((item) => {
-      const itemPrice = Number(item.priceSnapshot);
+      const itemPrice = Number(item.priceSnapshot) || Number(item.product.price);
       const itemSubtotal = itemPrice * item.quantity;
       
       return {
@@ -111,17 +94,16 @@ export const createOrderService = async (data: CreateOrderInput) => {
       };
     });
 
-    // Eksekusi insert batch ke tabel orderItem
     await tx.orderItem.createMany({
       data: orderItemsData
     });
 
-    // 6. Kosongkan item keranjang belanja user setelah sukses order
     await tx.cartItem.deleteMany({
-      where: { cartId: userCart.id }
+      where: {
+        id: { in: data.cartItemIds }
+      }
     });
 
-    // Ambil data order lengkap beserta relasinya untuk dilempar balik ke frontend
     return await tx.order.findUnique({
       where: { id: newOrder.id },
       include: { items: true, shipping: true }
@@ -131,7 +113,6 @@ export const createOrderService = async (data: CreateOrderInput) => {
   });
 };
 
-// Feature: Ambil Semua Riwayat Order milik User tertentu
 export const getUserOrdersHistoryService = async (userId: string) => {
   if (!userId) {
     throw new Error("userId wajib disertakan untuk melihat riwayat!");
@@ -140,16 +121,58 @@ export const getUserOrdersHistoryService = async (userId: string) => {
   return await prisma.order.findMany({
     where: { userId },
     include: {
-      items: true,    
-      shipping: true, 
+      items: {
+        include: {
+          product: true
+        }
+      },
+      shipping: true,
     },
     orderBy: {
-      createdAt: 'desc' 
+      createdAt: 'desc'
     }
   });
 };
 
-// Feature Customer: Mengonfirmasi bahwa barang telah sampai di tangan pembeli
+export const prepareOrderService = async (orderId: string) => {
+  const existingOrder = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!existingOrder) throw new Error("Data pesanan toko tidak ditemukan!");
+  if (existingOrder.status !== "PROCESSING") throw new Error("Pesanan tidak bisa dikemas karena statusnya belum dibayar lunas!");
+
+  return await prisma.order.update({
+    where: { id: orderId },
+    data: { status: "PREPARING" }
+  });
+};
+
+export const readyToShipOrderService = async (orderId: string) => {
+  const existingOrder = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!existingOrder) throw new Error("Data pesanan toko tidak ditemukan!");
+  if (existingOrder.status !== "PREPARING") throw new Error("Pesanan tidak bisa disiapkan sebelum selesai tahap pengemasan!");
+
+  return await prisma.order.update({
+    where: { id: orderId },
+    data: { status: "READY_TO_SHIP" }
+  });
+};
+
+export const shipOrderService = async (orderId: string) => {
+  const existingOrder = await prisma.order.findUnique({
+    where: { id: orderId }
+  });
+
+  if (!existingOrder) {
+    throw new Error("Data pesanan toko tidak ditemukan!");
+  }
+
+  if (existingOrder.status !== "READY_TO_SHIP") throw new Error("Pesanan tidak bisa diserahkan ke kurir sebelum siap dipaketkan!");
+
+  return await prisma.order.update({
+    where: { id: orderId },
+    data: { status: "SHIPPED" }
+  });
+};
+
 export const completeOrderService = async (orderId: string) => {
   const existingOrder = await prisma.order.findUnique({
     where: { id: orderId }
@@ -165,13 +188,10 @@ export const completeOrderService = async (orderId: string) => {
 
   return await prisma.order.update({
     where: { id: orderId },
-    data: {
-      status: "DELIVERED"
-    }
+    data: { status: "DELIVERED" }
   });
 };
 
-// Feature Customer: Membatalkan pesanan secara mandiri (Hanya jika belum bayar!)
 export const cancelOrderService = async (orderId: string) => {
   const existingOrder = await prisma.order.findUnique({
     where: { id: orderId }
@@ -181,14 +201,93 @@ export const cancelOrderService = async (orderId: string) => {
     throw new Error("Data pesanan (Order) tidak ditemukan!");
   }
 
-  if (existingOrder.status !== "WAITING_PAYMENT") {
-    throw new Error("Pesanan tidak dapat dibatalkan karena pembayaran telah diverifikasi atau barang sedang diproses!");
+  const allowedCancelStatuses = ["WAITING_PAYMENT", "PROCESSING"];
+  if (!allowedCancelStatuses.includes(existingOrder.status)) {
+    throw new Error("Pesanan tidak dapat dibatalkan karena sudah masuk tahap gudang/pengiriman!");
   }
 
   return await prisma.order.update({
     where: { id: orderId },
-    data: {
-      status: "CANCELLED"
+    data: { status: "CANCELLED" }
+  });
+};
+
+export const getOrderByIdService = async (orderId: string) => {
+  if (!orderId) {
+    throw new Error("orderId wajib disertakan untuk melihat detail nota!");
+  }
+
+  // 🚀 FIXED: query diubah dari 'orderId' menjadi 'id' sesuai PK skema prisma lo
+  return await prisma.order.findUnique({
+    where: { id: orderId }, 
+    include: {
+      items: {
+        include: {
+          product: true
+        }
+      },
+      shipping: true,
+      payment: true
     }
   });
+};
+
+export const getAwaitingConfirmationOrdersService = async () => {
+  return await prisma.order.findMany({
+    where: {
+      status: "WAITING_CONFIRMATION"
+    },
+    include: {
+      user: true,
+      payment: true,
+      shipping: true
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+};
+
+interface VerifyPaymentInput {
+  orderId: string;
+  action: "APPROVE" | "REJECT";
+}
+
+export const verifyManualPaymentService = async (data: VerifyPaymentInput) => {
+  const existingOrder = await prisma.order.findUnique({
+    where: { id: data.orderId },
+    include: { payment: true }
+  });
+
+  if (!existingOrder) {
+    throw new Error("Data pesanan tidak ditemukan di database!");
+  }
+
+  if (existingOrder.status !== "WAITING_CONFIRMATION") {
+    throw new Error("Pesanan tidak sedang dalam antrean verifikasi pembayaran manual!");
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    if (data.action === "APPROVE") {
+      await tx.payment.update({
+        where: { orderId: data.orderId },
+        data: { status: "APPROVED" }
+      });
+
+      return await tx.order.update({
+        where: { id: data.orderId },
+        data: { status: "PROCESSING" }
+      });
+    } else {
+      await tx.payment.update({
+        where: { orderId: data.orderId },
+        data: { status: "REJECTED" }
+      });
+
+      return await tx.order.update({
+        where: { id: data.orderId },
+        data: { status: "WAITING_PAYMENT" }
+      });
+    }
+  }, { timeout: 15000 });
 };

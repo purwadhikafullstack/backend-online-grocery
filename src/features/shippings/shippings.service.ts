@@ -9,6 +9,7 @@ interface ShippingRequest {
   destLat: number;
   destLng: number;
   userId: string;
+  storeId?: string; // 🚀 FIXED: Menambahkan tipe data storeId opsional di interface request
 }
 
 interface Coordinate {
@@ -54,26 +55,40 @@ const findNearestStore = (userCoords: Coordinate, stores: StoreBranch[]): StoreB
   return nearestStore;
 };
 
-// ==========================================
-// CORE SHIPPING SERVICE (SLIM VERSION)
-// ==========================================
 export const getBiteshipRates = async (data: ShippingRequest) => {
-  const dbStores = await prisma.store.findMany();
-  const storesForHaversine: StoreBranch[] = dbStores.map(store => ({
-    id: store.id,
-    name: store.name,
-    latitude: Number(store.latitude),
-    longitude: Number(store.longitude)
-  }));
+  let originLat = -6.222;
+  let originLng = 106.649;
 
-  const userLocation: Coordinate = { latitude: Number(data.destLat), longitude: Number(data.destLng) };
-  const nearestStore = findNearestStore(userLocation, storesForHaversine);
+  // 🚀 FIXED BLOCK: Cek apakah frontend mengirimkan storeId pilihan user secara spesifik
+  if (data.storeId) {
+    const chosenStore = await prisma.store.findUnique({
+      where: { id: data.storeId }
+    });
+    
+    if (chosenStore) {
+      originLat = Number(chosenStore.latitude);
+      originLng = Number(chosenStore.longitude);
+      console.log(`🎯 [SPECIFIC ORIGIN] Menggunakan Koordinat Cabang Pilihan User: ${chosenStore.name} (${originLat}, ${originLng})`);
+    }
+  } else {
+    // Fallback cerdas: Jalankan Haversine hanya jika storeId tidak didefinisikan dari frontend
+    const dbStores = await prisma.store.findMany();
+    const storesForHaversine: StoreBranch[] = dbStores.map(store => ({
+      id: store.id,
+      name: store.name,
+      latitude: Number(store.latitude),
+      longitude: Number(store.longitude)
+    }));
 
-  const originLat = nearestStore ? nearestStore.latitude : -6.222;
-  const originLng = nearestStore ? nearestStore.longitude : 106.649;
+    const userLocation: Coordinate = { latitude: Number(data.destLat), longitude: Number(data.destLng) };
+    const nearestStore = findNearestStore(userLocation, storesForHaversine);
 
-  if (nearestStore) {
-    console.log(`🎯 [DATABASE HAVERSINE] Toko Terdekat: ${nearestStore.name}`);
+    originLat = nearestStore ? nearestStore.latitude : -6.222;
+    originLng = nearestStore ? nearestStore.longitude : 106.649;
+
+    if (nearestStore) {
+      console.log(`🎯 [DATABASE FALLBACK HAVERSINE] Toko Terdekat Otomatis: ${nearestStore.name}`);
+    }
   }
 
   const userCart = await prisma.cart.findFirst({
@@ -107,7 +122,7 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
     origin_longitude: Number(originLng),
     destination_latitude: Number(data.destLat),
     destination_longitude: Number(data.destLng),
-    couriers: 'gojek,grab,jne,sicepat,anteraja',
+    couriers: 'gojek,grab',
     items: itemPayloads
   };
 
@@ -119,7 +134,6 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
 
     const rawPricing = response.data.pricing || [];
 
-    // Langsung map data asli dari Biteship tanpa bumper dummy data lagi
     return rawPricing.map((item: any) => ({
       company: item.company,
       name: `${item.courier_name} - ${item.courier_service_name}`, 
