@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, StoreType } from '@prisma/client';
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '@/application/database';
 import { ResponseError } from '@/error/response.error';
@@ -31,11 +31,10 @@ type CategoryWithCount = Prisma.CategoryGetPayload<{
 }>;
 
 export const getDefaultStoreLocation = async () => {
-  const store = await prisma.store.findFirst({
-    where: { deletedAt: null },
-    orderBy: { createdAt: 'asc' },
+  const storeUtama = await prisma.store.findFirst({
+    where: { type: StoreType.UTAMA, deletedAt: null },
   });
-  return store ?? FALLBACK_STORE;
+  return storeUtama ?? FALLBACK_STORE;
 };
 
 // 🚀 TAMBAHAN BARU: Fungsi service publik untuk menarik seluruh daftar toko cabang aktif
