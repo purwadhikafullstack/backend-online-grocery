@@ -9,6 +9,12 @@ export const getDefaultStoreLocation = async (_req: Request, res: Response) => {
   res.status(StatusCodes.OK).json({ data });
 };
 
+// 🚀 TAMBAHAN BARU: Controller publik untuk melayani endpoint GET /stores
+export const getStores = async (_req: Request, res: Response) => {
+  const data = await catalogService.getStores();
+  res.status(StatusCodes.OK).json({ data });
+};
+
 export const getCategories = async (req: Request, res: Response) => {
   const query = Validation.validate(categoryQuerySchema, req.query);
   const result = await catalogService.getCategories(query);

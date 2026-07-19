@@ -27,11 +27,11 @@ model User {
   addresses       Address[]
   carts           Cart[]
   orders          Order[]
-  requestedMutations StockMutation[] @relation("RequestedMutations")
-  acceptedMutations  StockMutation[] @relation("AcceptedMutations")
-  rejectedMutations  StockMutation[] @relation("RejectedMutations")
-  shippedMutations   StockMutation[] @relation("ShippedMutations")
-  receivedMutations  StockMutation[] @relation("ReceivedMutations")
+  requestedMutations StockMutation[]  @relation("RequestedMutations")
+  acceptedMutations  StockMutation[]  @relation("AcceptedMutations")
+  rejectedMutations  StockMutation[]  @relation("RejectedMutations")
+  shippedMutations   StockMutation[]  @relation("ShippedMutations")
+  receivedMutations  StockMutation[]  @relation("ReceivedMutations")
   socialAccounts  SocialAccount[]
   storeAdmins     StoreAdmin[]
   referrer        User?               @relation("Referral", fields: [referredBy], references: [id])
@@ -153,32 +153,32 @@ model Inventory {
 }
 
 model StockMutation {
-  id            String       @id @default(uuid())
-  inventoryId   String
+  id                     String       @id @default(uuid())
+  inventoryId            String
   destinationInventoryId String?
-  type          MutationType
-  quantity      Int
-  status        StockMutationStatus @default(REQUESTED)
-  referenceType String?
-  referenceId   String?
-  notes         String?
-  requestedById String?
-  acceptedById  String?
-  rejectedById  String?
-  shippedById   String?
-  receivedById  String?
-  acceptedAt    DateTime?
-  rejectedAt    DateTime?
-  shippedAt     DateTime?
-  receivedAt    DateTime?
-  createdAt     DateTime     @default(now())
-  inventory     Inventory    @relation("SourceInventory", fields: [inventoryId], references: [id])
-  destinationInventory Inventory? @relation("DestinationInventory", fields: [destinationInventoryId], references: [id])
-  requestedBy   User?        @relation("RequestedMutations", fields: [requestedById], references: [id])
-  acceptedBy    User?        @relation("AcceptedMutations", fields: [acceptedById], references: [id])
-  rejectedBy    User?        @relation("RejectedMutations", fields: [rejectedById], references: [id])
-  shippedBy     User?        @relation("ShippedMutations", fields: [shippedById], references: [id])
-  receivedBy    User?        @relation("ReceivedMutations", fields: [receivedById], references: [id])
+  type                   MutationType
+  quantity               Int
+  status                 StockMutationStatus @default(REQUESTED)
+  referenceType          String?
+  referenceId            String?
+  notes                  String?
+  requestedById          String?
+  acceptedById           String?
+  rejectedById           String?
+  shippedById            String?
+  receivedById           String?
+  acceptedAt             DateTime?
+  rejectedAt             DateTime?
+  shippedAt              DateTime?
+  receivedAt             DateTime?
+  createdAt              DateTime     @default(now())
+  inventory              Inventory    @relation("SourceInventory", fields: [inventoryId], references: [id])
+  destinationInventory   Inventory?   @relation("DestinationInventory", fields: [destinationInventoryId], references: [id])
+  requestedBy            User?        @relation("RequestedMutations", fields: [requestedById], references: [id])
+  acceptedBy             User?        @relation("AcceptedMutations", fields: [acceptedById], references: [id])
+  rejectedBy             User?        @relation("RejectedMutations", fields: [rejectedById], references: [id])
+  shippedBy              User?        @relation("ShippedMutations", fields: [shippedById], references: [id])
+  receivedBy             User?        @relation("ReceivedMutations", fields: [receivedById], references: [id])
 }
 
 model Cart {
@@ -344,13 +344,16 @@ enum VoucherType {
   FIXED
 }
 
+// 🚀 FIXED ENUM STATE MACHINE LOGISTIK BARU UNTUK KELOMPOK LO
 enum OrderStatus {
   WAITING_PAYMENT
   WAITING_CONFIRMATION
   PROCESSING
-  SHIPPED
-  DELIVERED
-  CANCELLED
+  PREPARING       // 👈 Status Baru: Sedang dikemas oleh gudang cabang
+  READY_TO_SHIP   // 👈 Status Baru: Selesai dikemas, ojol sedang dipanggil
+  SHIPPED         // Status Bawaan: Paket diserahkan ke kurir ojol
+  DELIVERED       // Status Bawaan: Pesanan selesai diterima pembeli
+  CANCELLED       // Status Bawaan: Dibatalkan pembeli / admin
 }
 
 enum PaymentStatus {

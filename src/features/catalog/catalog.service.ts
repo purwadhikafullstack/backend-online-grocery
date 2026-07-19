@@ -38,6 +38,11 @@ export const getDefaultStoreLocation = async () => {
   return store ?? FALLBACK_STORE;
 };
 
+// 🚀 TAMBAHAN BARU: Fungsi service publik untuk menarik seluruh daftar toko cabang aktif
+export const getStores = async () => {
+  return await getStoreBranches();
+};
+
 const getStoreBranches = async () => {
   const stores = await prisma.store.findMany({ where: { deletedAt: null } });
   return stores.map((store) => ({ ...store, latitude: Number(store.latitude), longitude: Number(store.longitude) }));

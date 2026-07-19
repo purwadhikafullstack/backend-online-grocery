@@ -6,9 +6,9 @@ const prisma = new PrismaClient();
 
 export const calculateRates = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { userId } = req.body;
+    // 🚀 FIXED: Sekarang ikut menerima parameter storeId opsional kiriman dari frontend
+    const { userId, storeId } = req.body;
 
-    // 1. Validasi awal: Cukup membutuhkan userId saja dari frontend!
     if (!userId) {
       res.status(400).json({
         success: false,
@@ -20,7 +20,7 @@ export const calculateRates = async (req: Request, res: Response): Promise<void>
     console.log("=== [INTEGRATED REQUEST] ===");
     console.log(`Mencari alamat utama untuk UserID: ${userId}`);
 
-    // 2. Cari alamat aktif utama (isPrimary) milik user di database alamat kamu
+    // Cari alamat aktif utama (isPrimary) milik user
     const primaryAddress = await prisma.address.findFirst({
       where: { 
         userId: String(userId),
@@ -39,11 +39,12 @@ export const calculateRates = async (req: Request, res: Response): Promise<void>
 
     console.log(`🏠 Alamat Utama Ditemukan: ${primaryAddress.label} (${primaryAddress.latitude}, ${primaryAddress.longitude})`);
 
-    // 3. Oper koordinat hasil pencarian database langsung ke Biteship Service
+    // 🚀 FIXED: Mengoper parameter storeId ke dalam data shipping service
     const rates = await getBiteshipRates({
       destLat: Number(primaryAddress.latitude),
       destLng: Number(primaryAddress.longitude),
-      userId: String(userId)
+      userId: String(userId),
+      storeId: storeId ? String(storeId) : undefined
     });
 
     res.status(200).json({
@@ -59,7 +60,7 @@ export const calculateRates = async (req: Request, res: Response): Promise<void>
   }
 };
 
-import * as shippingService from './shippings.service'; // Pastikan ada / tambahkan jika belum
+import * as shippingService from './shippings.service';
 
 export const shipOrder = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -73,7 +74,6 @@ export const shipOrder = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Eksekusi fungsi update resi & status orderan
     const result = await shippingService.shipOrderService({ orderId, resi });
 
     res.status(200).json({

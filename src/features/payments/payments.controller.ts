@@ -57,14 +57,25 @@ export const approvePayment = async (req: Request, res: Response): Promise<void>
 
 export const handleMidtransNotification = async (req: Request, res: Response): Promise<void> => {
   try {
-    // 1. KITA CEK & LOG DATA ASLI DARI POSTMAN DI TERMINAL VS CODE
-    console.log("=== ISI REQ.BODY ASLI DARI POSTMAN ===", req.body);
+    console.log("=== ISI REQ.BODY ASLI DARI POSTMAN DENGAN UUID ===", req.body);
 
-    // 2. KITA TEMBAK LANGSUNG KEY SNAKE_CASE DARI POSTMAN TANPA DI-MAP LAGI
+    const rawOrderId = req.body.order_id as string; //
+    
+    // 🚀 FIXED LOGIC: Panjang standar UUID v4 adalah 36 karakter (termasuk strip bawaan).
+    // - Jika panjangnya lebih dari 36, berarti ada tambahan nomor acak dari Midtrans (e.g., UUID-1710000000)
+    // - Kita cari posisi strip paling terakhir untuk memotong suffix tersebut dengan aman tanpa merusak UUID!
+    let cleanOrderId = rawOrderId;
+    if (rawOrderId && rawOrderId.length > 36) {
+      const lastDashIndex = rawOrderId.lastIndexOf('-');
+      cleanOrderId = rawOrderId.substring(0, lastDashIndex);
+    }
+
+    console.log(`🧹 Hasil Pembersihan ID Pesanan: ${cleanOrderId}`);
+
     const result = await paymentService.processMidtransNotificationService({
-      orderId: req.body.order_id,             // Mengambil key "order_id"
-      transactionStatus: req.body.transaction_status, // Mengambil key "transaction_status"
-      fraudStatus: req.body.fraud_status       // Mengambil key "fraud_status"
+      orderId: cleanOrderId,                          // 👈 Menggunakan ID asli UUID yang utuh dan bersih
+      transactionStatus: req.body.transaction_status, //
+      fraudStatus: req.body.fraud_status       //[cite: 8]
     });
 
     res.status(200).json({
