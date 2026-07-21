@@ -2,81 +2,6 @@ import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-interface ConfirmPaymentInput {
-  orderId: string;
-  amount: number;
-  bankName: string;
-  accountNumber: string;
-  proofUrl: string;
-}
-
-// 1. Feature User: Mengunggah Bukti Pembayaran Manual (Transfer Bank)
-export const confirmPaymentService = async (data: ConfirmPaymentInput) => {
-  const existingOrder = await prisma.order.findUnique({
-    where: { id: data.orderId }
-  });
-
-  if (!existingOrder) {
-    throw new Error("Data pesanan (Order) tidak ditemukan!");
-  }
-
-  return await prisma.$transaction(async (tx) => {
-    const newPayment = await tx.payment.create({
-      data: {
-        orderId: data.orderId,
-        amount: new Prisma.Decimal(data.amount),
-        bankName: data.bankName,
-        accountNumber: data.accountNumber,
-        proofUrl: data.proofUrl,
-        status: "PENDING"
-      }
-    });
-
-    const updatedOrder = await tx.order.update({
-      where: { id: data.orderId },
-      data: {
-        status: "WAITING_CONFIRMATION"
-      }
-    });
-
-    return {
-      payment: newPayment,
-      orderStatus: updatedOrder.status
-    };
-  }, {
-    timeout: 20000
-  });
-};
-
-// 2. Feature Admin: Menyetujui Pembayaran Manual dari User
-export const approvePaymentService = async (paymentId: string) => {
-  const payment = await prisma.payment.findUnique({
-    where: { id: paymentId }
-  });
-
-  if (!payment) {
-    throw new Error("Data transaksi pembayaran tidak ditemukan!");
-  }
-
-  return await prisma.$transaction(async (tx) => {
-    const updatedPayment = await tx.payment.update({
-      where: { id: paymentId },
-      data: { status: "APPROVED" }
-    });
-
-    const updatedOrder = await tx.order.update({
-      where: { id: payment.orderId },
-      data: { status: "PROCESSING" }
-    });
-
-    return {
-      payment: updatedPayment,
-      orderStatus: updatedOrder.status
-    };
-  });
-};
-
-// 3. Feature Otomatis: Sinkronisasi Webhook Midtrans Pasca Bayar Real-time
 interface ProcessNotificationInput {
   orderId: string;
   transactionStatus: string;
@@ -122,7 +47,6 @@ export const processMidtransNotificationService = async (data: ProcessNotificati
   });
 };
 
-// 4. Feature User: Membuat Token Pembayaran QRIS Midtrans Secara Otomatis
 export const createMidtransQrisService = async (orderId: string) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId }
@@ -133,14 +57,12 @@ export const createMidtransQrisService = async (orderId: string) => {
   }
 
   let finalAmount = 0;
-
   if (order.totalAmount && !isNaN(order.totalAmount.toNumber()) && order.totalAmount.toNumber() > 0) {
     finalAmount = order.totalAmount.toNumber();
   } else {
     const dbSubtotal = order.subtotal ? order.subtotal.toNumber() : 0;
     const dbShipping = order.shippingCost ? order.shippingCost.toNumber() : 0;
     const dbDiscount = order.discountAmount ? order.discountAmount.toNumber() : 0;
-    
     finalAmount = (dbSubtotal + dbShipping) - dbDiscount;
   }
 
@@ -172,7 +94,6 @@ export const createMidtransQrisService = async (orderId: string) => {
   });
 
   const transaction: any = await response.json();
-
   if (transaction.error_messages) {
     throw new Error(`Snap API Error: ${transaction.error_messages.join(', ')}`);
   }

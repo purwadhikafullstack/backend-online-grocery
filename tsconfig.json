@@ -1,7 +1,6 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    // File Layout
+    /* File Layout */
     "rootDir": "./src",
     "outDir": "./dist",
     "baseUrl": ".",
@@ -9,43 +8,26 @@
       "@/*": ["./src/*"]
     },
 
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
+    /* Environment Settings */
     "module": "commonjs",
-    "target": "es2016",
-    // For nodejs:
-    // "lib": ["esnext"],
-    // "types": ["node"],
-    // and npm install -D @types/node
+    "target": "es2020",
+    "lib": ["esnext"],
+    "types": ["node"],
     "moduleResolution": "node",
 
-    // Other Outputs
-    // "sourceMap": true,
-    // "declaration": true,
-    // "declarationMap": true,
+    /* Other Outputs */
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
     "esModuleInterop": true,
 
-    // Stricter Typechecking Options
-    // "noUncheckedIndexedAccess": true,
-    // "exactOptionalPropertyTypes": true,
-
-    // Style Options
-    // "noImplicitReturns": true,
-    // "noImplicitOverride": true,
-    // "noUnusedLocals": true,
-    // "noUnusedParameters": true,
-    // "noFallthroughCasesInSwitch": true,
-    // "noPropertyAccessFromIndexSignature": true,
+    /* Code Quality & Safety */
     "forceConsistentCasingInFileNames": true,
-
-    // Recommended Options
     "strict": true,
-    // "jsx": "react-jsx",
-    // "verbatimModuleSyntax": true,
-    // "isolatedModules": true,
-    // "noUncheckedSideEffectImports": true,
-    // "moduleDetection": "force",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    /* Silence TS Deprecation Warnings */
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"],
   "ts-node": {

@@ -9,7 +9,7 @@ interface ShippingRequest {
   destLat: number;
   destLng: number;
   userId: string;
-  storeId?: string; // 🚀 FIXED: Menambahkan tipe data storeId opsional di interface request
+  storeId?: string;
 }
 
 interface Coordinate {
@@ -59,7 +59,7 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
   let originLat = -6.222;
   let originLng = 106.649;
 
-  // 🚀 FIXED BLOCK: Cek apakah frontend mengirimkan storeId pilihan user secara spesifik
+  // Cek apakah frontend mengirimkan storeId pilihan user secara spesifik
   if (data.storeId) {
     const chosenStore = await prisma.store.findUnique({
       where: { id: data.storeId }
@@ -71,7 +71,7 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
       console.log(`🎯 [SPECIFIC ORIGIN] Menggunakan Koordinat Cabang Pilihan User: ${chosenStore.name} (${originLat}, ${originLng})`);
     }
   } else {
-    // Fallback cerdas: Jalankan Haversine hanya jika storeId tidak didefinisikan dari frontend
+    // Fallback cerdas: Jalankan Haversine jika storeId tidak didefinisikan[cite: 3]
     const dbStores = await prisma.store.findMany();
     const storesForHaversine: StoreBranch[] = dbStores.map(store => ({
       id: store.id,
@@ -91,9 +91,15 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
     }
   }
 
+  // 🚀 FIXED: Filter items HANYA untuk storeId yang dipilih untuk cegah data bocor/duplikat[cite: 3]
   const userCart = await prisma.cart.findFirst({
     where: { userId: data.userId },
-    include: { items: { include: { product: true } } }
+    include: { 
+      items: {
+        where: data.storeId ? { storeId: data.storeId } : {},
+        include: { product: true }
+      } 
+    }
   });
 
   let itemPayloads: any[] = [];
@@ -114,7 +120,7 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
       });
     });
   } else {
-    throw new Error("Gagal mengecek ongkir: Keranjang belanja di database kosong!");
+    throw new Error("Gagal mengecek ongkir: Tidak ada produk di keranjang untuk cabang ini!");
   }
 
   const payload = {
@@ -149,7 +155,6 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
   }
 };
 
-// Admin Feature: Kirim barang & simpan nomor resi resmi
 interface ShipOrderInput {
   orderId: string;
   resi: string;

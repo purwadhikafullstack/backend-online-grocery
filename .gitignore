@@ -1,6 +1,19 @@
+# Dependencies
 node_modules
-# Keep environment variables out of version control
-.env
-/generated/prisma
-.DS_Store
+
+# Build output
 dist
+
+# Environment variables
+.env
+.env.*
+!.example.env
+!.env.example
+
+# Prisma generated client & binaries (Di mana pun lokasinya)
+**/generated/prisma
+
+# Logs & OS files
+*.log
+.DS_Store
+.vscode/
