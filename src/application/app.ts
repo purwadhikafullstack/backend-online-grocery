@@ -116,7 +116,7 @@ API Routes
 ─────────────────────────────────────────────────────────────
 */
 // Daftarkan Route Fitur Alamat kamu (Feature 2)
-app.use(`${API_PREFIX}/auth`, authLimiter, authRouter);
+app.use(`${API_PREFIX}/auth`, authRouter); //authLimiter : dimatikan sementara untuk menghindari error 429 Too Many Requests
 app.use(`${API_PREFIX}/addresses`, addressRouter);
 app.use(`${API_PREFIX}/carts`, cartRouter);
 
