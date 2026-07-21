@@ -3,7 +3,7 @@ interface Coordinate {
   longitude: number;
 }
 
-interface StoreBranch {
+export interface StoreBranch {
   id: string;
   name: string;
   latitude: number;
