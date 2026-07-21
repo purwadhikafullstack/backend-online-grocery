@@ -27,7 +27,7 @@
     "skipLibCheck": true,
 
     /* Silence TS Deprecation Warnings */
-    "ignoreDeprecations": "6.0"
+    // "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"],
   "ts-node": {

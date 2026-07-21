@@ -47,7 +47,7 @@ const getStoreBranches = async () => {
   return stores.map((store) => ({ ...store, latitude: Number(store.latitude), longitude: Number(store.longitude) }));
 };
 
-export const resolveNearestStore = async (query: CatalogQuery) => {
+const resolveNearestStore = async (query: CatalogQuery) => {
   const stores = await getStoreBranches();
   if (!stores.length) return FALLBACK_STORE;
   const fallback = await getDefaultStoreLocation();
