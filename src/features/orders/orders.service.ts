@@ -227,6 +227,7 @@ export const getAllAdminOrdersService = async (filters: AdminOrdersFilterInput =
   const { storeId, status, startDate, endDate } = filters;
   const whereCondition: Prisma.OrderWhereInput = {};
 
+  // Strict store filter validation
   if (
     storeId &&
     storeId !== 'ALL' &&
@@ -261,7 +262,7 @@ export const getAllAdminOrdersService = async (filters: AdminOrdersFilterInput =
       items: { include: { product: true } },
       shipping: true,
       payment: true,
-      store: { select: { id: true, name: true } },
+      store: { select: { id: true, name: true } }, // Fixed TS2353
       user: { select: { id: true, name: true, email: true } },
       address: true
     },
