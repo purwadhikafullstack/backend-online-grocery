@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 import * as authService from './auth.service';
 import * as githubAuthService from './github-auth.service';
+import * as googleAuthProvider from './google-auth-provider';
 import { ResponseError } from '@/error/response.error';
 
 const emailSchema = z.object({ email: z.string().email().max(120) });
@@ -12,6 +13,7 @@ const profileSchema = z.object({ name: z.string().min(2).max(80).optional() });
 const passwordSchema = z.object({ currentPassword: z.string().min(8), newPassword: z.string().min(8).max(72) });
 const tokenSchema = z.object({ token: z.string().min(32) });
 const githubCallbackSchema = z.object({ code: z.string().min(8) });
+const googleCredentialSchema = z.object({ credential: z.string().trim().min(1).max(10000) });
 
 const userId = (req: Request) => {
   if (!req.user) throw new ResponseError(StatusCodes.UNAUTHORIZED, 'Authentication required.');
@@ -43,6 +45,13 @@ export const login = run(async (req, res) => {
 
 export const githubCallback = run(async (req, res) => {
   const result = await githubAuthService.loginWithGitHub(githubCallbackSchema.parse(req.body).code);
+  res.status(StatusCodes.OK).json(result);
+});
+
+export const google = run(async (req, res) => {
+  const result = await googleAuthProvider.loginWithGoogle(
+    googleCredentialSchema.parse(req.body).credential,
+  );
   res.status(StatusCodes.OK).json(result);
 });
 
