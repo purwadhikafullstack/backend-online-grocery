@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 export const calculateRates = async (req: Request, res: Response): Promise<void> => {
   try {
-    // 🚀 FIXED: Sekarang ikut menerima parameter storeId opsional kiriman dari frontend
+
     const { userId, storeId } = req.body;
 
     if (!userId) {
@@ -20,7 +20,6 @@ export const calculateRates = async (req: Request, res: Response): Promise<void>
     console.log("=== [INTEGRATED REQUEST] ===");
     console.log(`Mencari alamat utama untuk UserID: ${userId}`);
 
-    // Cari alamat aktif utama (isPrimary) milik user
     const primaryAddress = await prisma.address.findFirst({
       where: { 
         userId: String(userId),
@@ -39,7 +38,6 @@ export const calculateRates = async (req: Request, res: Response): Promise<void>
 
     console.log(`🏠 Alamat Utama Ditemukan: ${primaryAddress.label} (${primaryAddress.latitude}, ${primaryAddress.longitude})`);
 
-    // 🚀 FIXED: Mengoper parameter storeId ke dalam data shipping service
     const rates = await getBiteshipRates({
       destLat: Number(primaryAddress.latitude),
       destLng: Number(primaryAddress.longitude),

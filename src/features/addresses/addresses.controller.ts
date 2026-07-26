@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
 import * as addressService from './addresses.service';
 
-// 1. Ambil Semua Alamat Berdasarkan Query/Body userId (BACKEND)
 export const getUserAddresses = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Membaca userId secara dinamis dari query string (misal: /addresses?userId=...)
     const userId = (req.query.userId || req.body.userId) as string;
 
     if (!userId) {
@@ -19,7 +17,6 @@ export const getUserAddresses = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// 2. Tambah Alamat Baru Dinamis
 export const createAddress = async (req: Request, res: Response): Promise<void> => {
   try {
     const { 
@@ -36,7 +33,6 @@ export const createAddress = async (req: Request, res: Response): Promise<void> 
       isPrimary 
     } = req.body;
 
-    // Validasi parameter wajib sebelum eksekusi ke DB
     if (!userId || !addressName || !receiverName || !phoneNumber || !addressDetails || latitude === undefined || longitude === undefined) {
       res.status(400).json({ message: "Semua kolom input termasuk userId dan koordinat GPS wajib diisi!" });
       return;
@@ -64,7 +60,6 @@ export const createAddress = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-// 3. Perbarui Detail Alamat Dinamis
 export const updateAddress = async (req: Request, res: Response): Promise<void> => {
   try {
     const addressId = req.params.id as string;
@@ -93,7 +88,6 @@ export const updateAddress = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-// 4. Hapus Alamat Dinamis
 export const deleteAddress = async (req: Request, res: Response): Promise<void> => {
   try {
     const addressId = req.params.id as string;

@@ -10,10 +10,6 @@ export interface StoreBranch {
   longitude: number;
 }
 
-/**
- * Fungsi untuk menghitung jarak antara dua koordinat GPS (dalam satuan Kilometer)
- * Menggunakan Rumus Matematika Haversine
- */
 export const calculateDistance = (coords1: Coordinate, coords2: Coordinate): number => {
   const EARTH_RADIUS_KM = 6371; // Jari-jari bumi dalam kilometer
 
@@ -29,12 +25,9 @@ export const calculateDistance = (coords1: Coordinate, coords2: Coordinate): num
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   
-  return EARTH_RADIUS_KM * c; // Mengembalikan hasil jarak dalam KM
+  return EARTH_RADIUS_KM * c;
 };
 
-/**
- * Fungsi untuk mencari toko cabang terdekat dari lokasi customer
- */
 export const findNearestStore = (userCoords: Coordinate, stores: StoreBranch[]): StoreBranch | null => {
   if (stores.length === 0) return null;
 
@@ -47,7 +40,6 @@ export const findNearestStore = (userCoords: Coordinate, stores: StoreBranch[]):
       longitude: store.longitude,
     });
 
-    // Jika jarak toko ini lebih dekat dari toko sebelumnya, simpan sebagai yang terdekat
     if (distance < shortestDistance) {
       shortestDistance = distance;
       nearestStore = store;

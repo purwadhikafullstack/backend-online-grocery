@@ -24,7 +24,6 @@ interface StoreBranch {
   longitude: number;
 }
 
-// Algoritma Haversine untuk hitung jarak toko terdekat
 const calculateDistance = (coords1: Coordinate, coords2: Coordinate): number => {
   const EARTH_RADIUS_KM = 6371; 
   const dLat = (coords2.latitude - coords1.latitude) * (Math.PI / 180);
@@ -59,7 +58,6 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
   let originLat = -6.222;
   let originLng = 106.649;
 
-  // Cek apakah frontend mengirimkan storeId pilihan user secara spesifik
   if (data.storeId) {
     const chosenStore = await prisma.store.findUnique({
       where: { id: data.storeId }
@@ -71,7 +69,6 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
       console.log(`🎯 [SPECIFIC ORIGIN] Menggunakan Koordinat Cabang Pilihan User: ${chosenStore.name} (${originLat}, ${originLng})`);
     }
   } else {
-    // Fallback cerdas: Jalankan Haversine jika storeId tidak didefinisikan[cite: 3]
     const dbStores = await prisma.store.findMany();
     const storesForHaversine: StoreBranch[] = dbStores.map(store => ({
       id: store.id,
@@ -90,8 +87,6 @@ export const getBiteshipRates = async (data: ShippingRequest) => {
       console.log(`🎯 [DATABASE FALLBACK HAVERSINE] Toko Terdekat Otomatis: ${nearestStore.name}`);
     }
   }
-
-  // 🚀 FIXED: Filter items HANYA untuk storeId yang dipilih untuk cegah data bocor/duplikat[cite: 3]
   const userCart = await prisma.cart.findFirst({
     where: { userId: data.userId },
     include: { 
