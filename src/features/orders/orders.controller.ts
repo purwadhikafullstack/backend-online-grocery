@@ -14,9 +14,6 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    console.log(`==== [CREATING ORDER] ====`);
-    console.log(`Memproses pembuatan Order ID untuk User: ${userId}`);
-
     const order = await createOrderService({
       userId,
       courierCompany,
@@ -44,15 +41,27 @@ export const getUserOrdersHistory = async (req: Request, res: Response): Promise
   try {
     const userId = req.query.userId as string;
     const storeId = req.query.storeId as string;
+    const status = req.query.status as string;
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+    const isAdminQuery = req.query.isAdmin === 'true';
 
-    if (storeId) {
-      console.log(`==== [FETCH ADMIN ORDERS] ==== Cabang Toko ID: ${storeId}`);
-      const orders = await orderService.getOrdersByStoreIdService(storeId);
+    // 🚀 DETEKSI REQUEST ADMIN: Jika flag isAdmin true ATAU tidak ada userId ATAU membawa parameter filter
+    const isAdminRequest = isAdminQuery || !userId || storeId !== undefined || status !== undefined || startDate !== undefined || endDate !== undefined;
+
+    if (isAdminRequest) {
+      console.log(`==== [FETCH ADMIN ORDERS] ==== Cabang: ${storeId || 'GLOBAL'}, Status: ${status || 'ALL'}, Date: ${startDate || 'ANY'} - ${endDate || 'ANY'}`);
+      const orders = await orderService.getAllAdminOrdersService({ storeId, status, startDate, endDate });
       res.status(200).json({
         success: true,
-        message: "Daftar antrean pesanan cabang berhasil diambil.",
+        message: "Daftar antrean/filter pesanan admin berhasil diambil.",
         data: orders
       });
+      return;
+    }
+
+    if (!userId) {
+      res.status(400).json({ success: false, message: "Parameter userId wajib dilampirkan!" });
       return;
     }
 

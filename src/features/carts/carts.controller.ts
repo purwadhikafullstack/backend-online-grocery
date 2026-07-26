@@ -32,17 +32,16 @@ export const updateCartItem = async (req: Request, res: Response): Promise<void>
 
 export const deleteCartItem = async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = req.params.id as string; // [source: 5]
-    await cartService.deleteCartItemService(id); // [source: 5]
-    res.status(200).json({ message: "Item dihapus dari keranjang" }); // [source: 5]
+    const id = req.params.id as string;
+    await cartService.deleteCartItemService(id);
+    res.status(200).json({ message: "Item dihapus dari keranjang" });
   } catch (error: any) {
-    res.status(500).json({ message: error.message }); // [source: 5]
+    res.status(500).json({ message: error.message });
   }
 };
 
 export const getUserCart = async (req: Request, res: Response): Promise<void> => {
   try {
-    // 🎯 DINAMIS: Ambil ID user aktif secara real-time dari payload token JWT via middleware
     const userId = (req as any).user?.id;
 
     if (!userId) {
@@ -50,9 +49,9 @@ export const getUserCart = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const cartData = await cartService.getUserCartService(userId); // [source: 5]
-    res.status(200).json(cartData || { items: [] }); // [source: 5]
+    const cartData = await cartService.getUserCartService(userId);
+    res.status(200).json(cartData || { items: [] });
   } catch (error: any) {
-    res.status(500).json({ message: error.message }); // [source: 5]
+    res.status(500).json({ message: error.message });
   }
 };

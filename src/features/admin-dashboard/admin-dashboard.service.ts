@@ -100,7 +100,7 @@ const getSalesByCategory = async (where: OrderScope) => {
 const startDate = () => {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - 29);
+  date.setDate(date.getDate() - 28);
   return date;
 };
 

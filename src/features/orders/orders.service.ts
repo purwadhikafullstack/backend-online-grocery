@@ -11,6 +11,74 @@ interface CreateOrderInput {
   paymentMethod: string;
 }
 
+export interface AdminOrdersFilterInput {
+  storeId?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+// 📌 1. Potong Stok Toko
+export const reduceStoreStockService = async (orderId: string, tx: Prisma.TransactionClient) => {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    include: { items: true }
+  });
+
+  if (!order) throw new Error("Data pesanan tidak ditemukan untuk pemotongan stok!");
+
+  for (const item of order.items) {
+    const inventory = await tx.inventory.findFirst({
+      where: {
+        storeId: order.storeId,
+        productId: item.productId,
+      }
+    });
+    if (!inventory) {
+      throw new Error(`Stok produk "${item.productName}" tidak terdaftar di toko cabang ini!`);
+    }
+    if (inventory.stock < item.quantity) {
+      throw new Error(`Stok cabang tidak mencukupi untuk "${item.productName}". Tersisa: ${inventory.stock}, Dibeli: ${item.quantity}`);
+    }
+
+    await tx.inventory.update({
+      where: { id: inventory.id },
+      data: {
+        stock: { decrement: item.quantity }
+      }
+    });
+  }
+};
+
+// 📌 2. Kembalikan Stok Toko (Restore)
+export const restoreStoreStockService = async (orderId: string, tx: Prisma.TransactionClient) => {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    include: { items: true }
+  });
+
+  if (!order) return;
+
+  for (const item of order.items) {
+    const inventory = await tx.inventory.findFirst({
+      where: {
+        storeId: order.storeId,
+        productId: item.productId,
+      }
+    });
+
+    if (inventory) {
+      await tx.inventory.update({
+        where: { id: inventory.id },
+        data: {
+          stock: { increment: item.quantity }
+        }
+      });
+    }
+  }
+};
+
+// 📌 3. Buat Order Baru & LANGSUNG Potong Stok Toko
 export const createOrderService = async (data: CreateOrderInput) => {
   const userCart = await prisma.cart.findFirst({
     where: { userId: data.userId },
@@ -83,6 +151,8 @@ export const createOrderService = async (data: CreateOrderInput) => {
     await tx.orderItem.createMany({ data: orderItemsData });
     await tx.cartItem.deleteMany({ where: { id: { in: data.cartItemIds } } });
 
+    await reduceStoreStockService(newOrder.id, tx);
+
     return await tx.order.findUnique({
       where: { id: newOrder.id },
       include: { items: true, shipping: true }
@@ -90,20 +160,137 @@ export const createOrderService = async (data: CreateOrderInput) => {
   }, { timeout: 20000 });
 };
 
-export const getUserOrdersHistoryService = async (userId: string) => {
-  if (!userId) {
-    throw new Error("Parameter userId wajib dilampirkan untuk melihat riwayat belanja!");
+// 📌 4. Pembatalan Order (Aman dari Double-Execution & Type-Safe)
+export const cancelOrderService = async (orderId: string) => {
+  return await prisma.$transaction(async (tx) => {
+    const updated = await tx.order.updateMany({
+      where: {
+        id: orderId,
+        status: { in: ["WAITING_PAYMENT", "PROCESSING"] }
+      },
+      data: {
+        status: "CANCELLED"
+      }
+    });
+
+    if (updated.count === 0) {
+      const existing = await tx.order.findUnique({ where: { id: orderId } });
+      
+      if (!existing) {
+        throw new Error("Data pesanan (Order) tidak ditemukan!");
+      }
+
+      if (existing.status === "CANCELLED") {
+        return existing;
+      }
+
+      throw new Error("Pesanan tidak dapat dibatalkan atau sudah masuk tahap pengiriman!");
+    }
+
+    await restoreStoreStockService(orderId, tx);
+
+    const result = await tx.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!result) {
+      throw new Error("Gagal mengambil data pesanan setelah dibatalkan.");
+    }
+
+    return result;
+  });
+};
+
+// 📌 5. Auto-Cancel Pesanan Kadaluarsa Worker
+export const cancelExpiredOrdersService = async () => {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+  const expiredOrders = await prisma.order.findMany({
+    where: {
+      status: "WAITING_PAYMENT",
+      createdAt: { lte: fiveMinutesAgo }
+    }
+  });
+
+  for (const order of expiredOrders) {
+    try {
+      await cancelOrderService(order.id);
+      console.log(`⏰ [Auto-Cancel] Order ID ${order.id} berhasil dibatalkan otomatis & stok dikembalikan.`);
+    } catch (err) {
+      console.error(`Gagal membatalkan order kadaluarsa ID ${order.id}:`, err);
+    }
   }
+};
+
+// 📌 6. Ambil Pesanan Admin (Support Filtering: Store, Status, & Tanggal)
+export const getAllAdminOrdersService = async (filters: AdminOrdersFilterInput = {}) => {
+  const { storeId, status, startDate, endDate } = filters;
+  const whereCondition: Prisma.OrderWhereInput = {};
+
+  if (
+    storeId &&
+    storeId !== 'ALL' &&
+    storeId !== 'null' &&
+    storeId !== 'undefined' &&
+    storeId.trim() !== ''
+  ) {
+    whereCondition.storeId = storeId;
+  }
+
+  if (status && status !== 'ALL' && status.trim() !== '') {
+    whereCondition.status = status as any;
+  }
+
+  if (startDate || endDate) {
+    whereCondition.createdAt = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      whereCondition.createdAt.gte = start;
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      whereCondition.createdAt.lte = end;
+    }
+  }
+
   return await prisma.order.findMany({
-    where: { userId },
-    include: { items: true, shipping: true, payment: true },
+    where: whereCondition,
+    include: {
+      items: { include: { product: true } },
+      shipping: true,
+      payment: true,
+      store: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, email: true } },
+      address: true
+    },
     orderBy: { createdAt: 'desc' }
   });
 };
 
-export const getOrdersByStoreIdService = async (storeId: string) => {
+// 📌 7. Ambil Riwayat Order User
+export const getUserOrdersHistoryService = async (userId: string) => {
+  if (!userId) {
+    throw new Error("Parameter userId wajib dilampirkan untuk melihat riwayat belanja!");
+  }
+
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const expiredOrders = await prisma.order.findMany({
+    where: {
+      userId,
+      status: "WAITING_PAYMENT",
+      createdAt: { lte: fiveMinutesAgo }
+    }
+  });
+
+  for (const order of expiredOrders) {
+    await cancelOrderService(order.id).catch(console.error);
+  }
+
   return await prisma.order.findMany({
-    where: { storeId: storeId },
+    where: { userId },
+    include: { items: true, shipping: true, payment: true },
     orderBy: { createdAt: 'desc' }
   });
 };
@@ -136,32 +323,42 @@ export const completeOrderService = async (orderId: string) => {
   return await prisma.order.update({ where: { id: orderId }, data: { status: "DELIVERED" } });
 };
 
-export const cancelOrderService = async (orderId: string) => {
-  const existingOrder = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!existingOrder) throw new Error("Data pesanan (Order) tidak ditemukan!");
-  const allowedCancelStatuses = ["WAITING_PAYMENT", "PROCESSING"];
-  if (!allowedCancelStatuses.includes(existingOrder.status)) {
-    throw new Error("Pesanan tidak dapat dibatalkan karena sudah masuk tahap gudang/pengiriman!");
-  }
-  return await prisma.order.update({ where: { id: orderId }, data: { status: "CANCELLED" } });
-};
-
+// 📌 8. Ambil Detail Order
 export const getOrderByIdService = async (orderId: string) => {
   if (!orderId) throw new Error("orderId wajib disertakan untuk melihat detail nota!");
   
-  return await prisma.order.findUnique({
+  let order = await prisma.order.findUnique({
     where: { id: orderId }, 
     include: { 
       items: { include: { product: true } }, 
-      store: true,       // 👈 Mengambil data toko pengirim
-      address: true,     // 👈 Mengambil data alamat pembeli
+      store: true,
+      address: true,
+      user: { select: { id: true, name: true, email: true } },
       shipping: { 
-        include: { 
-          originStore: true, 
-          destinationAddress: true 
-        } 
+        include: { originStore: true, destinationAddress: true } 
       }, 
       payment: true 
     }
   });
+
+  if (!order) return null;
+
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  if (order.status === "WAITING_PAYMENT" && new Date(order.createdAt) <= fiveMinutesAgo) {
+    await cancelOrderService(order.id).catch(console.error);
+    
+    order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { 
+        items: { include: { product: true } }, 
+        store: true,
+        address: true,
+        user: { select: { id: true, name: true, email: true } },
+        shipping: { include: { originStore: true, destinationAddress: true } }, 
+        payment: true 
+      }
+    });
+  }
+
+  return order;
 };

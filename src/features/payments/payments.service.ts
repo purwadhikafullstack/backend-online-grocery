@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+import { restoreStoreStockService } from '../orders/orders.service';
 
 const prisma = new PrismaClient();
 
@@ -41,9 +42,22 @@ export const processMidtransNotificationService = async (data: ProcessNotificati
 
   console.log(`🔄 Mengubah status Order dari ${order.status} -> ${nextOrderStatus}`);
 
-  return await prisma.order.update({
-    where: { id: data.orderId },
-    data: { status: nextOrderStatus }
+  if (order.status === nextOrderStatus) {
+    return order;
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // 🚀 Stok TIDAK DIPOTONG di sini lagi, karena sudah dipotong di awal transaksi!
+
+    // 🚀 Jika transaksi dibatalkan / expired oleh Midtrans, kembalikan stok
+    if ((order.status === "WAITING_PAYMENT" || order.status === "PROCESSING") && nextOrderStatus === "CANCELLED") {
+      await restoreStoreStockService(order.id, tx);
+    }
+
+    return await tx.order.update({
+      where: { id: data.orderId },
+      data: { status: nextOrderStatus }
+    });
   });
 };
 

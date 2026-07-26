@@ -18,8 +18,28 @@ type PasswordInput = { currentPassword: string; newPassword: string };
 
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 const selectUser = {
-  id: true, name: true, email: true, role: true, authProvider: true,
-  isVerified: true, emailVerifiedAt: true, profileImageUrl: true,
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  authProvider: true,
+  isVerified: true,
+  emailVerifiedAt: true,
+  profileImageUrl: true,
+  storeAdmins: {
+    select: {
+      id: true,
+      storeId: true,
+      store: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          type: true,
+        },
+      },
+    },
+  },
 } as const;
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
