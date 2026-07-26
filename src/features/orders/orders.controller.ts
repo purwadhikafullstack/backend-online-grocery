@@ -39,18 +39,38 @@ export const createOrder = async (req: Request, res: Response): Promise<void> =>
 
 export const getUserOrdersHistory = async (req: Request, res: Response): Promise<void> => {
   try {
+    const currentUser = (req as any).user;
     const userId = req.query.userId as string;
-    const storeId = req.query.storeId as string;
+    let storeId = req.query.storeId as string;
     const status = req.query.status as string;
     const startDate = req.query.startDate as string;
     const endDate = req.query.endDate as string;
     const isAdminQuery = req.query.isAdmin === 'true';
 
-    // 🚀 DETEKSI REQUEST ADMIN: Jika flag isAdmin true ATAU tidak ada userId ATAU membawa parameter filter
-    const isAdminRequest = isAdminQuery || !userId || storeId !== undefined || status !== undefined || startDate !== undefined || endDate !== undefined;
+    // 🔒 ISOLASI KEAMANAN SERVER-SIDE (RBAC Guard)
+    const userRole = currentUser?.role;
+    if (userRole === 'STORE_ADMIN') {
+      // Ambil storeId milik Store Admin dari token/session
+      const assignedStoreId = currentUser?.storeId || currentUser?.storeAdmins?.[0]?.storeId;
+      if (assignedStoreId) {
+        storeId = assignedStoreId; // Override paksa parameter storeId
+      }
+    }
+
+    // DETEKSI REQUEST ADMIN
+    const isAdminRequest = 
+      userRole === 'SUPER_ADMIN' || 
+      userRole === 'STORE_ADMIN' || 
+      isAdminQuery || 
+      !userId || 
+      storeId !== undefined || 
+      status !== undefined || 
+      startDate !== undefined || 
+      endDate !== undefined;
 
     if (isAdminRequest) {
-      console.log(`==== [FETCH ADMIN ORDERS] ==== Cabang: ${storeId || 'GLOBAL'}, Status: ${status || 'ALL'}, Date: ${startDate || 'ANY'} - ${endDate || 'ANY'}`);
+      console.log(`==== [FETCH ADMIN ORDERS] ==== Role: ${userRole || 'UNKNOWN'}, Cabang: ${storeId || 'GLOBAL'}, Status: ${status || 'ALL'}`);
+      
       const orders = await orderService.getAllAdminOrdersService({ storeId, status, startDate, endDate });
       res.status(200).json({
         success: true,
